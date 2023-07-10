@@ -2,6 +2,7 @@ require('dotenv').config();
 const axios = require('axios');
 const { Client, IntentsBitField, EmbedBuilder, ActivityType } = require('discord.js');
 const moment = require('moment-timezone');
+const sqlite3 = require('sqlite3').verbose();
 
 const timeZone = 'Europe/Lisbon'; // Replace with the desired time zone (e.g., 'America/New_York')
 
@@ -42,8 +43,12 @@ async function retrieveRank() {
             },
             }
         );
+
+        for (type of leagueData.data) {
+            if (type.queueType === 'RANKED_SOLO_5x5') return type;
+        }
     
-        return leagueData.data;
+        return null;
     } catch (error) {
         console.error(error);
         throw new Error('An error occurred while retrieving the rank.');
@@ -57,10 +62,10 @@ async function retrieveRank() {
         const name = "ltou Kaiji";
 
         await retrieveRank().then((leagueData) => {
-            if (leagueData.length === 0) {
+            if (!leagueData) {
                 interaction.reply(`${name} is currently unranked.`);
             } else {
-                const { tier, rank, leaguePoints, wins, losses } = leagueData[0];
+                const { tier, rank, leaguePoints, wins, losses } = leagueData;
                 interaction.reply(`${name} is currently ranked ${tier} ${rank} with ${leaguePoints} LP (${wins} wins, ${losses} losses).`);
             }
         }).catch((error) => {
@@ -78,19 +83,24 @@ async function dailyUpdate() {
   
     // Wait until the next midnight
     await sleep(timeUntilMidnight);
+    
+    // Send the scheduled message
+    const channel = client.channels.cache.get(process.env.RANK_CHANNEL_ID); // Replace with your channel ID
+    if (!channel) return;
 
     let leagueData;
     await retrieveRank().then((dataRetieved) => {
-        leagueData = dataRetieved[0];
+        if (dataRetieved) {
+            leagueData = dataRetieved;
+        } else {
+            channel.send('Unranked...');
+            dailyUpdate();
+        }
     }).catch((error) => {
         console.error(error);
     })
 
-    const { tier, rank, leaguePoints, wins, losses } = leagueData;
-  
-    // Send the scheduled message
-    const channel = client.channels.cache.get(process.env.RANK_CHANNEL_ID); // Replace with your channel ID
-    if (!channel) return;
+    const { tier, rank, leaguePoints } = leagueData;
 
     const day = currentDate.add(1, 'day').format('DD/MM/YYYY');
 
@@ -113,3 +123,49 @@ function sleep(ms) {
   }
 
 client.login(process.env.DISCORD_TOKEN);
+
+// Establish a connection to the SQLite database
+const db = new sqlite3.Database('src/database.db', (err) => {
+    if (err) {
+      console.error('Error connecting to database:', err);
+    } else {
+      console.log('Connected to the database.');
+  
+      // Read the .sql file
+      const fs = require('fs');
+      const schema = fs.readFileSync('src/database.sql', 'utf-8');
+  
+      // Execute the .sql file to create tables
+      db.exec(schema, (err) => {
+        if (err) {
+          console.error('Error executing schema:', err);
+        } else {
+          console.log('Tables created successfully.');
+  
+          // Check if initial rows exist before inserting them
+          db.get('SELECT COUNT(*) AS count FROM scores', (err, row) => {
+            if (err) {
+              console.error('Error checking if initial rows exist:', err);
+              return;
+            }
+  
+            const initialRowCount = row.count;
+  
+            if (initialRowCount === 0) {
+              // Insert the initial rows
+              const initialDataSql = fs.readFileSync('src/initial_values.sql', 'utf-8');
+              db.exec(initialDataSql, (err) => {
+                if (err) {
+                  console.error('Error inserting initial data:', err);
+                } else {
+                  console.log('Initial data inserted successfully.');
+                }
+              });
+            } else {
+              console.log('Initial rows already exist. Skipping insertion.');
+            }
+          });
+        }
+      });
+    }
+  });
