@@ -127,45 +127,45 @@ client.login(process.env.DISCORD_TOKEN);
 // Establish a connection to the SQLite database
 const db = new sqlite3.Database('src/database.db', (err) => {
     if (err) {
-      console.error('Error connecting to database:', err);
+        console.error('Error connecting to database:', err);
     } else {
-      console.log('Connected to the database.');
+        console.log('Connected to the database.');
   
-      // Read the .sql file
-      const fs = require('fs');
-      const schema = fs.readFileSync('src/database.sql', 'utf-8');
+        // Read the .sql file
+        const fs = require('fs');
+        const schema = fs.readFileSync('src/database.sql', 'utf-8');
   
-      // Execute the .sql file to create tables
-      db.exec(schema, (err) => {
-        if (err) {
-          console.error('Error executing schema:', err);
-        } else {
-          console.log('Tables created successfully.');
-  
-          // Check if initial rows exist before inserting them
-          db.get('SELECT COUNT(*) AS count FROM scores', (err, row) => {
+        // Execute the .sql file to create tables
+        db.exec(schema, (err) => {
             if (err) {
-              console.error('Error checking if initial rows exist:', err);
-              return;
-            }
-  
-            const initialRowCount = row.count;
-  
-            if (initialRowCount === 0) {
-              // Insert the initial rows
-              const initialDataSql = fs.readFileSync('src/initial_values.sql', 'utf-8');
-              db.exec(initialDataSql, (err) => {
-                if (err) {
-                  console.error('Error inserting initial data:', err);
-                } else {
-                  console.log('Initial data inserted successfully.');
-                }
-              });
+            console.error('Error executing schema:', err);
             } else {
-              console.log('Initial rows already exist. Skipping insertion.');
+                console.log('Tables created successfully.');
+        
+                // Check if initial rows exist before inserting them
+                db.get('SELECT COUNT(*) AS count FROM scores', (err, row) => {
+                    if (err) {
+                        console.error('Error checking if initial rows exist:', err);
+                        return;
+                    }
+        
+                    const initialRowCount = row.count;
+        
+                    if (initialRowCount === 0) {
+                        // Insert the initial rows
+                        const initialDataSql = fs.readFileSync('src/initial_values.sql', 'utf-8');
+                        db.exec(initialDataSql, (err) => {
+                            if (err) {
+                                console.error('Error inserting initial data:', err);
+                            } else {
+                                console.log('Initial data inserted successfully.');
+                            }
+                        });
+                    } else {
+                        console.log('Initial rows already exist. Skipping insertion.');
+                    }
+                });
             }
-          });
-        }
-      });
+        });
     }
-  });
+});
